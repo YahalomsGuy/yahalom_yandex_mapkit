@@ -18,26 +18,41 @@ class PlacemarkMapObjectController:
     controller: YandexMapController
   ) {
     var placemark: YMKPlacemarkMapObject? = nil
-    let point = UtilsLite.pointFromJson(params["point"] as! [String: NSNumber])
-
+    
+    guard let pointDict = params["point"] as? [String: NSNumber] else {
+      print("Error: 'point' parameter missing or invalid")
+      return
+    }
+    let point = UtilsLite.pointFromJson(pointDict)
+    
     if (parent is YMKClusterizedPlacemarkCollection) {
       placemark = (parent as! YMKClusterizedPlacemarkCollection).addPlacemark()
-    }
-
-    if (parent is YMKMapObjectCollection) {
+    } else if (parent is YMKMapObjectCollection) {
       placemark = (parent as! YMKMapObjectCollection).addPlacemark()
+    } else {
+      print("Error: parent is neither clusterized nor map object collection")
+      return
     }
 
-    self.placemark = placemark!
-    self.id = params["id"] as! String
+    guard let placemarkUnwrapped = placemark else {
+      print("Error: Failed to create placemark")
+      return
+    }
+    self.placemark = placemarkUnwrapped
+
+    guard let id = params["id"] as? String else {
+      print("Error: 'id' parameter missing or invalid")
+      return
+    }
+    self.id = id
     self.controller = controller
     self.internallyControlled = false
 
     super.init()
 
-    placemark!.userData = self.id
-    placemark!.addTapListener(with: self)
-    placemark!.setDragListenerWith(self)
+    placemarkUnwrapped.userData = self.id
+    placemarkUnwrapped.addTapListener(with: self)
+    placemarkUnwrapped.setDragListenerWith(self)
     update(params)
   }
 
@@ -47,7 +62,12 @@ class PlacemarkMapObjectController:
     controller: YandexMapController
   ) {
     self.placemark = placemark
-    self.id = params["id"] as! String
+    
+    guard let id = params["id"] as? String else {
+      print("Error: 'id' parameter missing or invalid")
+      fatalError("Missing required 'id' parameter")
+    }
+    self.id = id
     self.controller = controller
     self.internallyControlled = true
 
@@ -61,19 +81,39 @@ class PlacemarkMapObjectController:
 
   public func update(_ params: [String: Any]) {
     if (!internallyControlled) {
-      placemark.geometry = UtilsLite.pointFromJson(params["point"] as! [String: NSNumber])
-      placemark.isVisible = (params["isVisible"] as! NSNumber).boolValue
+      if let pointDict = params["point"] as? [String: NSNumber] {
+        placemark.geometry = UtilsLite.pointFromJson(pointDict)
+      } else {
+        print("Warning: 'point' parameter missing or invalid in update")
+      }
+      
+      if let isVisibleNum = params["isVisible"] as? NSNumber {
+        placemark.isVisible = isVisibleNum.boolValue
+      }
     }
 
-    placemark.zIndex = (params["zIndex"] as! NSNumber).floatValue
-    placemark.isDraggable = (params["isDraggable"] as! NSNumber).boolValue
-    placemark.opacity = (params["opacity"] as! NSNumber).floatValue
-    placemark.direction = (params["direction"] as! NSNumber).floatValue
+    if let zIndexNum = params["zIndex"] as? NSNumber {
+      placemark.zIndex = zIndexNum.floatValue
+    }
+
+    if let isDraggableNum = params["isDraggable"] as? NSNumber {
+      placemark.isDraggable = isDraggableNum.boolValue
+    }
+
+    if let opacityNum = params["opacity"] as? NSNumber {
+      placemark.opacity = opacityNum.floatValue
+    }
+
+    if let directionNum = params["direction"] as? NSNumber {
+      placemark.direction = directionNum.floatValue
+    }
 
     setText(params["text"] as? [String: Any])
     setIcon(params["icon"] as? [String: Any])
 
-    consumeTapEvents = (params["consumeTapEvents"] as! NSNumber).boolValue
+    if let consumeTapEventsNum = params["consumeTapEvents"] as? NSNumber {
+      consumeTapEvents = consumeTapEventsNum.boolValue
+    }
   }
 
   public func remove() {
@@ -85,53 +125,70 @@ class PlacemarkMapObjectController:
   }
 
   func onMapObjectDragStart(with mapObject: YMKMapObject) {
-    controller!.mapObjectDragStart(id: id)
+    controller?.mapObjectDragStart(id: id)
   }
 
   func onMapObjectDrag(with mapObject: YMKMapObject, point: YMKPoint) {
-    controller!.mapObjectDrag(id: id, point: point)
+    controller?.mapObjectDrag(id: id, point: point)
   }
 
   func onMapObjectDragEnd(with mapObject: YMKMapObject) {
-    controller!.mapObjectDragEnd(id: id)
+    controller?.mapObjectDragEnd(id: id)
   }
 
   func onMapObjectTap(with mapObject: YMKMapObject, point: YMKPoint) -> Bool {
-    controller!.mapObjectTap(id: id, point: point)
-
+    controller?.mapObjectTap(id: id, point: point)
     return consumeTapEvents
   }
 
   private func setText(_ text: [String: Any]?) {
-    if (text == nil) {
+    guard let text = text else { return }
+
+    guard
+      let textString = text["text"] as? String,
+      let styleDict = text["style"] as? [String: Any]
+    else {
+      print("Warning: Invalid text or style data")
       return
     }
 
-    placemark.setTextWithText(text!["text"] as! String, style: getTextStyle(text!["style"] as! [String: Any]))
+    placemark.setTextWithText(textString, style: getTextStyle(styleDict))
   }
 
   private func setIcon(_ icon: [String: Any]?) {
-    if (icon == nil) {
+    guard let icon = icon else { return }
+
+    guard let iconType = icon["type"] as? String else {
+      print("Warning: Icon type missing")
       return
     }
 
-    let iconType = icon!["type"] as! String
-
     if (iconType == "single") {
-      let style = icon!["style"] as! [String: Any]
-      let image = style["image"] as! [String: Any]
+      guard
+        let style = icon["style"] as? [String: Any],
+        let image = style["image"] as? [String: Any]
+      else {
+        print("Warning: Invalid icon style or image")
+        return
+      }
 
       placemark.setIconWith(getIconImage(image), style: getIconStyle(style))
-    }
+    } else if (iconType == "composite") {
+      guard let iconParts = icon["iconParts"] as? [[String: Any]] else {
+        print("Warning: Invalid iconParts for composite icon")
+        return
+      }
 
-    if (iconType == "composite") {
       let compositeIcon = placemark.useCompositeIcon()
-      let iconParts = icon!["iconParts"] as! [[String: Any]]
-
       for iconPart in iconParts {
-        let style = iconPart["style"] as! [String: Any]
-        let image = style["image"] as! [String: Any]
-        let name = iconPart["name"] as! String
+        guard
+          let style = iconPart["style"] as? [String: Any],
+          let image = style["image"] as? [String: Any],
+          let name = iconPart["name"] as? String
+        else {
+          print("Warning: Invalid iconPart data")
+          continue
+        }
 
         compositeIcon.setIconWithName(name, image: getIconImage(image), style: getIconStyle(style))
       }
@@ -139,22 +196,26 @@ class PlacemarkMapObjectController:
   }
 
   private func getIconImage(_ image: [String: Any]) -> UIImage {
-    let type = image["type"] as! String
-    let defaultImage = UIImage()
+    guard let type = image["type"] as? String else {
+      return UIImage()
+    }
 
     if (type == "fromAssetImage") {
-      let assetName = controller!.pluginRegistrar.lookupKey(forAsset: image["assetName"] as! String)
-
-      return UIImage(named: assetName) ?? defaultImage
+      if let assetName = image["assetName"] as? String {
+        let key = controller?.pluginRegistrar.lookupKey(forAsset: assetName) ?? assetName
+        return UIImage(named: key) ?? UIImage()
+      }
+      return UIImage()
     }
 
     if (type == "fromBytes") {
-      let imageData = (image["rawImageData"] as! FlutterStandardTypedData).data
-
-      return UIImage(data: imageData) ?? defaultImage
+      if let imageData = image["rawImageData"] as? FlutterStandardTypedData {
+        return UIImage(data: imageData.data) ?? UIImage()
+      }
+      return UIImage()
     }
 
-    return defaultImage
+    return UIImage()
   }
 
   private func getTextStyle(_ style: [String: Any]) -> YMKTextStyle {
@@ -168,11 +229,26 @@ class PlacemarkMapObjectController:
       textStyle.outlineColor = UtilsLite.uiColor(fromInt: outlineColor.int64Value)
     }
 
-    textStyle.size = (style["size"] as! NSNumber).floatValue
-    textStyle.offset = (style["offset"] as! NSNumber).floatValue
-    textStyle.offsetFromIcon = (style["offsetFromIcon"] as! NSNumber).boolValue
-    textStyle.textOptional = (style["textOptional"] as! NSNumber).boolValue
-    textStyle.placement = YMKTextStylePlacement.init(rawValue: (style["placement"] as! NSNumber).uintValue)!
+    if let sizeNum = style["size"] as? NSNumber {
+      textStyle.size = sizeNum.floatValue
+    }
+
+    if let offsetNum = style["offset"] as? NSNumber {
+      textStyle.offset = offsetNum.floatValue
+    }
+
+    if let offsetFromIconNum = style["offsetFromIcon"] as? NSNumber {
+      textStyle.offsetFromIcon = offsetFromIconNum.boolValue
+    }
+
+    if let textOptionalNum = style["textOptional"] as? NSNumber {
+      textStyle.textOptional = textOptionalNum.boolValue
+    }
+
+    if let placementNum = style["placement"] as? NSNumber,
+       let placement = YMKTextStylePlacement(rawValue: placementNum.uintValue) {
+      textStyle.placement = placement
+    }
 
     return textStyle
   }
@@ -184,14 +260,30 @@ class PlacemarkMapObjectController:
       iconStyle.tappableArea = UtilsLite.rectFromJson(tappableArea)
     }
 
-    iconStyle.anchor = NSValue(cgPoint: UtilsLite.rectPointFromJson(style["anchor"] as! [String: NSNumber]))
-    iconStyle.zIndex = (style["zIndex"] as! NSNumber)
-    iconStyle.scale = (style["scale"] as! NSNumber)
-    iconStyle.visible = (style["isVisible"] as! NSNumber)
-    iconStyle.flat = (style["isFlat"] as! NSNumber)
-    iconStyle.rotationType = YMKRotationType.init(
-      rawValue: (style["rotationType"] as! NSNumber).uintValue
-    )!.rawValue as NSNumber
+    if let anchorDict = style["anchor"] as? [String: NSNumber] {
+      iconStyle.anchor = NSValue(cgPoint: UtilsLite.rectPointFromJson(anchorDict))
+    }
+
+    if let zIndexNum = style["zIndex"] as? NSNumber {
+      iconStyle.zIndex = zIndexNum
+    }
+
+    if let scaleNum = style["scale"] as? NSNumber {
+      iconStyle.scale = scaleNum
+    }
+
+    if let isVisibleNum = style["isVisible"] as? NSNumber {
+      iconStyle.visible = isVisibleNum
+    }
+
+    if let isFlatNum = style["isFlat"] as? NSNumber {
+      iconStyle.flat = isFlatNum
+    }
+
+    if let rotationTypeNum = style["rotationType"] as? NSNumber,
+       let rotationType = YMKRotationType(rawValue: rotationTypeNum.uintValue) {
+      iconStyle.rotationType = rotationType.rawValue as NSNumber
+    }
 
     return iconStyle
   }
