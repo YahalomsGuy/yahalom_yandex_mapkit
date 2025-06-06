@@ -1,4 +1,4 @@
-/// this is version 4.1.0.5 by guy
+/// this is version 4.1.0.6 by guy
 import YandexMapsMobile
 
 class PlacemarkMapObjectController:
@@ -100,59 +100,58 @@ class PlacemarkMapObjectController:
 
   func onMapObjectTap(with mapObject: YMKMapObject, point: YMKPoint) -> Bool {
     controller!.mapObjectTap(id: id, point: point)
-
     return consumeTapEvents
   }
 
   private func setText(_ text: [String: Any]?) {
-    if (text == nil) {
+    if text == nil {
       return
     }
 
-    placemark.setTextWithText(text!["text"] as! String, style: getTextStyle(text!["style"] as! [String: Any]))
+    placemark.setTextWithText(
+      text!["text"] as! String,
+      style: getTextStyle(text!["style"] as! [String: Any])
+    )
   }
 
   private func setIcon(_ icon: [String: Any]?) {
-    if (icon == nil) {
-      return
-    }
-
-    let iconType = icon!["type"] as! String
-
-    if (iconType == "single") {
-      let style = icon!["style"] as! [String: Any]
-      let image = style["image"] as! [String: Any]
-
-      placemark.setIconWith(getIconImage(image), style: getIconStyle(style))
-    }
-
-    if (iconType == "composite") {
-      let compositeIcon = placemark.useCompositeIcon()
-      let iconParts = icon!["iconParts"] as! [[String: Any]]
-
-      for iconPart in iconParts {
-        let style = iconPart["style"] as! [String: Any]
-        let image = style["image"] as! [String: Any]
-        let name = iconPart["name"] as! String
-
-        compositeIcon.setIconWithName(name, image: getIconImage(image), style: getIconStyle(style))
+      if icon == nil {
+          return
       }
-    }
+      let iconType = icon!["type"] as! String
+
+      if iconType == "single" {
+          let style = icon!["style"] as! [String: Any]
+          let image = style["image"] as! [String: Any]
+
+          placemark.setIconWith(getIconImage(image), style: getIconStyle(style))
+      }
+
+      if iconType == "composite" {
+          let compositeIcon = placemark.useCompositeIcon()
+          let iconParts = icon!["iconParts"] as! [[String: Any]]
+
+          for iconPart in iconParts {
+              let style = iconPart["style"] as! [String: Any]
+              let image = style["image"] as! [String: Any]
+              let name = iconPart["name"] as! String
+
+              compositeIcon.setIconWithName(name, image: getIconImage(image), style: getIconStyle(style))
+          }
+      }
   }
 
   private func getIconImage(_ image: [String: Any]) -> UIImage {
     let type = image["type"] as! String
     let defaultImage = UIImage()
 
-    if (type == "fromAssetImage") {
+    if type == "fromAssetImage" {
       let assetName = controller!.pluginRegistrar.lookupKey(forAsset: image["assetName"] as! String)
-
       return UIImage(named: assetName) ?? defaultImage
     }
 
-    if (type == "fromBytes") {
+    if type == "fromBytes" {
       let imageData = (image["rawImageData"] as! FlutterStandardTypedData).data
-
       return UIImage(data: imageData) ?? defaultImage
     }
 
@@ -161,40 +160,35 @@ class PlacemarkMapObjectController:
 
   private func getTextStyle(_ style: [String: Any]) -> YMKTextStyle {
     let textStyle = YMKTextStyle()
-
     if let color = style["color"] as? NSNumber {
       textStyle.color = UtilsLite.uiColor(fromInt: color.int64Value)
     }
-
     if let outlineColor = style["outlineColor"] as? NSNumber {
       textStyle.outlineColor = UtilsLite.uiColor(fromInt: outlineColor.int64Value)
     }
-
     textStyle.size = (style["size"] as! NSNumber).floatValue
     textStyle.offset = (style["offset"] as! NSNumber).floatValue
     textStyle.offsetFromIcon = (style["offsetFromIcon"] as! NSNumber).boolValue
     textStyle.textOptional = (style["textOptional"] as! NSNumber).boolValue
-    textStyle.placement = YMKTextStylePlacement.init(rawValue: (style["placement"] as! NSNumber).uintValue)!
-
+    textStyle.placement = YMKTextStylePlacement(rawValue: (style["placement"] as! NSNumber).uintValue)!
     return textStyle
   }
 
   private func getIconStyle(_ style: [String: Any]) -> YMKIconStyle {
-    let iconStyle = YMKIconStyle()
-
-    if let tappableArea = style["tappableArea"] as? [String: Any] {
-      iconStyle.tappableArea = UtilsLite.rectFromJson(tappableArea)
+        let iconStyle = YMKIconStyle()
+    
+        if let tappableArea = style["tappableArea"] as? [String: Any] {
+            iconStyle.tappableArea = UtilsLite.rectFromJson(tappableArea)
+        }
+    
+        iconStyle.anchor = NSValue(cgPoint: UtilsLite.rectPointFromJson(style["anchor"] as! [String: NSNumber]))
+        iconStyle.zIndex = (style["zIndex"] as! NSNumber)
+        iconStyle.scale = (style["scale"] as! NSNumber)
+        iconStyle.visible = (style["isVisible"] as! NSNumber)
+        iconStyle.flat = (style["isFlat"] as! NSNumber)
+        iconStyle.rotationType = NSNumber(value: YMKRotationType(rawValue: (style["rotationType"] as! NSNumber).uintValue)!.rawValue)
+    
+        return iconStyle
     }
 
-    iconStyle.anchor = NSValue(cgPoint: UtilsLite.rectPointFromJson(style["anchor"] as! [String: NSNumber]))
-    iconStyle.zIndex = (style["zIndex"] as! NSNumber)
-    iconStyle.scale = (style["scale"] as! NSNumber)
-    iconStyle.visible = (style["isVisible"] as! NSNumber)
-    iconStyle.flat = (style["isFlat"] as! NSNumber)
-    iconStyle.rotationType = YMKRotationType.init(
-      rawValue: (style["rotationType"] as! NSNumber).uintValue
-    )!.rawValue as NSNumber
-
-    return iconStyle
-  }
 }
