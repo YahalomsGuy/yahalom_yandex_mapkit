@@ -12,37 +12,38 @@ class PlacemarkMapObjectController:
   public weak var controller: YandexMapController?
   public let id: String
 
-  public required init(
+  // Make this initializer failable to allow returning nil before super.init()
+  public required init?(
     parent: YMKBaseMapObjectCollection,
     params: [String: Any],
     controller: YandexMapController
   ) {
-    var placemark: YMKPlacemarkMapObject? = nil
-    
     guard let pointDict = params["point"] as? [String: NSNumber] else {
       print("Error: 'point' parameter missing or invalid")
-      return
+      return nil
     }
     let point = UtilsLite.pointFromJson(pointDict)
-    
+
+    var placemark: YMKPlacemarkMapObject? = nil
+
     if (parent is YMKClusterizedPlacemarkCollection) {
       placemark = (parent as! YMKClusterizedPlacemarkCollection).addPlacemark()
     } else if (parent is YMKMapObjectCollection) {
       placemark = (parent as! YMKMapObjectCollection).addPlacemark()
     } else {
       print("Error: parent is neither clusterized nor map object collection")
-      return
+      return nil
     }
 
     guard let placemarkUnwrapped = placemark else {
       print("Error: Failed to create placemark")
-      return
+      return nil
     }
     self.placemark = placemarkUnwrapped
 
     guard let id = params["id"] as? String else {
       print("Error: 'id' parameter missing or invalid")
-      return
+      return nil
     }
     self.id = id
     self.controller = controller
@@ -62,7 +63,7 @@ class PlacemarkMapObjectController:
     controller: YandexMapController
   ) {
     self.placemark = placemark
-    
+
     guard let id = params["id"] as? String else {
       print("Error: 'id' parameter missing or invalid")
       fatalError("Missing required 'id' parameter")
@@ -86,7 +87,7 @@ class PlacemarkMapObjectController:
       } else {
         print("Warning: 'point' parameter missing or invalid in update")
       }
-      
+
       if let isVisibleNum = params["isVisible"] as? NSNumber {
         placemark.isVisible = isVisibleNum.boolValue
       }
@@ -272,17 +273,26 @@ class PlacemarkMapObjectController:
       iconStyle.scale = scaleNum
     }
 
-    if let isVisibleNum = style["isVisible"] as? NSNumber {
-      iconStyle.visible = isVisibleNum
+    if let visibleNum = style["visible"] as? NSNumber {
+      iconStyle.visible = visibleNum.boolValue
     }
 
-    if let isFlatNum = style["isFlat"] as? NSNumber {
-      iconStyle.flat = isFlatNum
+    if let flatNum = style["flat"] as? NSNumber {
+      iconStyle.flat = flatNum.boolValue
     }
 
     if let rotationTypeNum = style["rotationType"] as? NSNumber,
-       let rotationType = YMKRotationType(rawValue: rotationTypeNum.uintValue) {
-      iconStyle.rotationType = rotationType.rawValue as NSNumber
+       let rotationType = YMKIconStyleRotationType(rawValue: rotationTypeNum.uintValue) {
+      iconStyle.rotationType = rotationType
+    }
+
+    if let anchorTypeNum = style["anchorType"] as? NSNumber,
+       let anchorType = YMKIconStyleAnchorType(rawValue: anchorTypeNum.uintValue) {
+      iconStyle.anchorType = anchorType
+    }
+
+    if let directionNum = style["direction"] as? NSNumber {
+      iconStyle.direction = directionNum.floatValue
     }
 
     return iconStyle
